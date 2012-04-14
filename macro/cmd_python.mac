@@ -1,0 +1,370 @@
+/*	pythonスクリプトの実行
+プリプロセスの結果は「アウトプット枠」へ書き出します。
+
+【対象者】
+	プログラマー
+
+【動作環境】
+	秀丸エディタ ver8.20 b14 で動作を確認。
+	秀丸エディタ ver8 以降なら動くはず。
+
+【Pythonバージョン】
+	どのバージョンでも動くはずです。
+	動作検証は2.7系で行っています。
+
+【動作】
+	＊ファイル全体を対象とします、選択の有無は無視されます。
+	＊利便性のため編集のファイルをセーブしなくてもpythonスクリプトを出来るようにしています。
+
+【importの動作】
+	＊ファイルへ保存されている
+		・更新マークが付いていない		（※１）
+		・更新マークが付いている		（※２）
+	＊ファイルへ保存されていない		（※２）
+
+	（※１）
+	importは正しく動作する。
+
+	（※２）
+	編集中のファイルをテンポラリファイルへ保存したのちに python で実行します。
+	そのため import は正しく動作しません。
+
+
+【文字コード】
+	利便性のため「エンコード指定／リダイレクト」を補っています。
+
+	（元）	print u"にほんご"
+
+	（結果）# -*- coding:utf8 -*-
+			import sys, codecs
+			sys.stdout = codecs.getwriter('cp932')(sys.stdout)
+			del sys, codecs
+			print u"にほんご"
+
+	エラー発生時に行番号が３行ずれます、ご注意下さい。
+
+	こうしないと以下エラーメッセージが出力されます。
+		UnicodeEncodeError: 'ascii' codec can't encode characters in position 0-3: ordinal not in range(128)
+
+【importのパスについて】
+	ファイルへ保存していない状態でもimportが効くようにパスを補っています。
+	sys.path.append(カレントディレクトリ)
+*/
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+//			ユーザーカスタマイズ
+//////////////////////////////////////////////////////////////////////////////
+
+//python.exe へのパス
+//$g_exe	= "python.exe";
+//$g_exe	= "C:\\Python26\\python.exe";
+$g_exe	= "C:\\Python27\\python.exe";
+//$g_exe	= "C:\\Python32\\python.exe";
+
+//警告レベルなど
+$_g_opt_base	= "";
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+//			内部処理
+//////////////////////////////////////////////////////////////////////////////
+
+//テンポラリディレクトリ名
+$g_tmpdir_base_name = "hidemaru_python_tmp_dir";
+
+//テンポラリファイル名
+//環境変数TMPのディレクトリに生成する。
+$g_tmpfile_base_name = "hidemaru_python_tmp";
+
+//pythonのエンコード宣言 (encoding declaration)
+//「Python リファレンスマニュアル」より
+$g_encode_reg = "coding[=:]\\s*([-\\c.]+)";
+
+//シェル側のリダイレクトで使用するエンコードを明示する。
+$g_redirect_pre = "import sys, codecs\n"								+
+			  	  "sys.stdout = codecs.getwriter('cp932')(sys.stdout)\n";
+$g_redirect_post = "del sys,codecs\n";
+
+//pythonモジュールのインポートパス
+$g_import_path_pre  = "sys.path.append(";
+$g_import_path_post = ")\n";
+
+$g_coding_pre	= "# -*- coding:";
+$g_coding_post	= " -*-";
+
+//Python3系かどうか
+#g_is_python3 = false;
+
+$g_current_dir = directory2;
+
+
+call Main;
+endmacro;
+
+
+Main:
+	disablehistory 0x0001| 0x0002| 0x0004| 0x0008| 0x0010| 0x0020| 0x0040| 0x0080;
+	disabledraw;
+	disableinvert;
+	##old_x=x;
+	##old_y=y;
+	call Start;
+	moveto ##old_x,##old_y;
+	return ##return ;
+
+
+Start:
+	call CheckEnvironment;
+	if(! ##return){
+		return false;
+	}
+
+	$$opt				= $_g_opt_base;
+	$$tmp_in_filename	= "";
+	##use_tmp_file		= true;
+	$$current_dir		= "";
+
+	//ファイル名が付けられていない or 更新あり
+	call GetTempFile;
+	if(0==strlen($$return)){
+		return false;
+	}
+	$$tmp_in_filename	= $$return;
+	##use_tmp_file		= true;
+	$$current_dir		= directory;
+
+	if(##use_tmp_file){
+		call MakeFile  $$tmp_in_filename;
+		if(! ##return){
+			return false;
+		}
+	}
+
+	$$cmd = $g_exe + " "
+			+ $$opt + " "
+			+ "\"" + $$tmp_in_filename + "\"";
+
+	call SpawnExe $$cmd, $$current_dir;
+	if(false == ##return){
+		return false;
+	}
+
+	if(##use_tmp_file){
+		deletefile $$tmp_in_filename;
+	}
+	return true;
+
+
+SnipPythonVersion:
+	/*バージョン番号の抜き出し
+	（例）	Python 2.4.2
+			Python 3.2.3
+	*/
+	searchdown "[0-9]+",regular;
+	if(!result){
+		return 0;
+	}
+	$$text = gettext2(seltopcolumn,seltoplineno,selendcolumn,selendlineno);
+	//memo:空白文字なら 0 が返る。
+	return val($$text);
+
+
+CheckEnvironment:
+	##prev_hidemaru = hidemaruhandle(0);
+	openfile "/h ";
+	##new_hidemaru = hidemaruhandle(0);
+
+	//-V = バージョン取得
+	$$cmd = $g_exe + " -V";
+	runex $$cmd
+			, 1 			//sync	  0:async 1:sync
+			, 0, "" 		//stdin   0:none 1:auto 2:file 3:(reserve) 4:all 5:select
+			, 5, "" 		//stdout  0:none 1:auto 2:file 3:add file  4:new 5:insert 6:replace
+			, 1, "" 		//stderr  0:none 1:=out 2:file 3:add file  4:new 5:insert 6:replace
+			, 0, "" 		//folder  0:none 1:current 2:specify 3:(reserve) 4:exe's folder
+			, 2 			//show	  0:auto 1:show 2:hide
+			, 1 			//nodraw  0:draw 1:no draw
+			, 0 			//unicode 0:ansi 2:unicode
+			;
+	##ret = result;
+	if(! ##ret){
+		message("CheckEnvironmentで失敗、python.exeが存在しない可能性があります。\n" + $g_exe);
+	}else{
+		gofiletop;
+		call SnipPythonVersion;
+		##version = ##return;
+		if(##version <= 0){
+			message("Pythonのバージョン番号を取得できませんでした\nversion=" + str(##version));
+		}else{
+			if(3 <= ##version){
+				#g_is_python3=true;
+			}else{
+				#g_is_python3=false;
+			}
+			##ret = true;
+		}
+	}
+	setactivehidemaru	##prev_hidemaru;
+	closehidemaruforced ##new_hidemaru;
+	return ##ret;
+
+
+//文字コードの判別
+GetEncodingOpt:
+	##c = charset&0x3f;
+	$$e = "";
+	if(1==##c){
+		$$e="cp932";
+	}else if(3==##c){
+		$$e="euc_jp";
+	}else if(4==##c){
+		$$e="cp932";
+	}else if(6==##c){
+		$$e="utf8";
+	}else if(9==##c){
+		$$e="gb2312";
+	}else if(10==##c){
+		$$e="big5";
+	}else if(11==##c){
+		$$e="ksc5601"; //違うかも?
+	}else if(12==##c){
+		$$e="ksc5601"; //違うかも?
+	}else{
+		return "";
+	}
+	return $g_coding_pre + $$e + $g_coding_post;
+
+
+InsertPythonEncoding:
+	//秀丸エディタの文字コードから python のencodeを取得する。
+	call GetEncodingOpt;
+	$$enc_hidemaru = $$return;
+
+	//ユーザーが明示的に指定しているエンコードを取得する
+	$$enc_user="";
+	gofiletop;
+	searchdown2 $g_encode_reg, regular;
+	if((! result) || (2<lineno)){
+		selectline;
+		$$enc_user=gettext2(seltopcolumn,seltoplineno,selendcolumn,selendlineno);
+	}
+
+	//エンコードの挿入（ユーザーよりも秀丸が賢そうなので秀丸を優先）
+	gofiletop;
+	if("" != $$enc_hidemaru){
+		insert $$enc_hidemaru + "\n";
+	}else{
+		if("" != $$enc_user){
+			insert $$enc_user + "\n";
+		}
+	}
+
+	$$mod_path = "r\"" + $g_current_dir + "\"";
+	if(#g_is_python3){
+		//Python3系
+		insert "import sys\n";
+		insert $g_import_path_pre;
+		insert $$mod_path;
+		insert $g_import_path_post;
+		insert "del sys\n";
+	}else{
+		insert $g_redirect_pre;
+		insert $g_import_path_pre;
+		insert $$mod_path;
+		insert $g_import_path_post;
+		insert $g_redirect_post;
+	}
+	return;
+
+
+MakeFile:
+	$$tmp_filename	= $$1;
+	##old_charset	= charset;
+	selectall;
+	$$text=gettext(seltopx,seltopy,selendx,selendy);
+	##prev_hidemaru = hidemaruhandle(0);
+
+	openfile "/h " + $$tmp_filename;
+	if(! result){
+		message("テンポラリファイルのオープンに失敗。\n" + $$tmp_filename);
+		return false;
+	}
+	##new_hidemaru = hidemaruhandle(0);
+	setencode ##old_charset,1;
+	insert $$text;
+	call InsertPythonEncoding;
+	save;
+	setactivehidemaru	##prev_hidemaru;
+	closehidemaruforced ##new_hidemaru;
+	return true;
+
+
+SpawnExe:
+	$$cmd				= $$1;
+	$$current_dir		= $$2;
+	runex $$cmd
+			, 1 			//sync	  0:async 1:sync
+			, 0, "" 		//stdin   0:none 1:auto 2:file 3:(reserve) 4:all 5:select
+			, 7, "" 		//stdout  0:none 1:auto 2:file 3:add file  4:new 5:insert 6:replace
+			, 1, "" 		//stderr  0:none 1:=out 2:file 3:add file  4:new 5:insert 6:replace
+			, 2, $$current_dir //folder  0:none 1:current 2:specify 3:(reserve) 4:exe's folder
+			, 2 			//show	  0:auto 1:show 2:hide
+			, 1 			//nodraw  0:draw 1:no draw
+			, 0 			//unicode 0:ansi 2:unicode
+			;
+	if(! result){
+		message("runex で失敗。!result");
+		return false;
+	}
+	return true;
+
+
+//ディレクトリ作成
+CreateDir:
+	$$abs_dirname = $$1;
+	##obj = createobject("Scripting.FileSystemObject");
+	callmethod ##obj,"CreateFolder",$$abs_dirname;
+	##ret=callmethod_returnnum(##obj,"FolderExists",$$abs_dirname);
+	if(! ##ret){
+		message("テンポラリディレクトリの作成に失敗しました。\n" + $$abs_dirname);
+	}
+	releaseobject ##obj;
+	return ##ret;
+
+
+GetTempFile:
+	$$tempdir = getenv("tmp");
+	if(0==strlen($$tempdir)){
+		message("環境変数 tmp が設定されていません、設定して下さい。");
+		return	false;
+	}
+
+	$$tempdir = $$tempdir + "\\" + $g_tmpdir_base_name;
+	call CreateDir $$tempdir;
+	if(! ##return){
+		return "";
+	}
+	$$tempdir = $$tempdir + "\\";
+
+	##n=0;
+	while(##n<1000){
+		$$tempfile = $$tempdir + $g_tmpfile_base_name + str(##n);
+		if( !existfile( $$tempfile ) ) {
+			return $$tempfile;
+		}
+		##n = ##n + 1;
+	}
+
+	message "テンポラリファイルが作成できません\n" +
+			$$tempfile + "\n\n" +
+			"下記テンポラリディレクトリ内のファイルを全て削除してみて下さい。\n" +
+			$$tempdir;
+
+	return "";
+
+
