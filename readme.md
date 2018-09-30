@@ -1,46 +1,46 @@
-#�G�ۃG�f�B�^��Python�𓮂����}�N��
+# 秀丸エディタでPythonを動かすマクロ
 
-##�T�v
-�G�ۃG�f�B�^�ŕҏW���̃\�[�X�R�[�h��Python�Ŏ��s���܂��B
+## 概要
+秀丸エディタで編集中のソースコードをPythonで実行します。
 
-###�X�N���[���V���b�g�i���̂P�j
-- ![python hidemaru](http://cdn-ak.f.st-hatena.com/images/fotolife/o/ohtorii/20120414/20120414161934.gif "Python �G�ۃG�f�B�^")
-###�X�N���[���V���b�g�i���̂Q�j
-- ![python hidemaru](http://cdn-ak.f.st-hatena.com/images/fotolife/o/ohtorii/20120414/20120414161912.gif "Python �G�ۃG�f�B�^")
-###�X�N���[���V���b�g�i���̂R�j
-- ![python hidemaru](http://cdn-ak.f.st-hatena.com/images/fotolife/o/ohtorii/20120414/20120414161852.gif "Python �G�ۃG�f�B�^")
-###�X�N���[���V���b�g�i���̂S�j
-- ![python hidemaru](http://cdn-ak.f.st-hatena.com/images/fotolife/o/ohtorii/20120414/20120414161838.gif "Python �G�ۃG�f�B�^")
+### スクリーンショット（その１）
+- ![python hidemaru](http://cdn-ak.f.st-hatena.com/images/fotolife/o/ohtorii/20120414/20120414161934.gif "Python 秀丸エディタ")
+### スクリーンショット（その２）
+- ![python hidemaru](http://cdn-ak.f.st-hatena.com/images/fotolife/o/ohtorii/20120414/20120414161912.gif "Python 秀丸エディタ")
+### スクリーンショット（その３）
+- ![python hidemaru](http://cdn-ak.f.st-hatena.com/images/fotolife/o/ohtorii/20120414/20120414161852.gif "Python 秀丸エディタ")
+### スクリーンショット（その４）
+- ![python hidemaru](http://cdn-ak.f.st-hatena.com/images/fotolife/o/ohtorii/20120414/20120414161838.gif "Python 秀丸エディタ")
 
-###�C���X�g�[�����@
-- �G�ۂ̃}�N���f�B���N�g���փR�s�[������L�[�A�T�C�����ĉ������B
+### インストール方法
+- 秀丸のマクロディレクトリへコピーしたらキーアサインして下さい。
 
-##�����
-- �G�ۃG�f�B�^ ver8.20 b14 �œ�����m�F�Aver8�ȍ~�Ȃ瓮���͂��B
+## 動作環境
+- 秀丸エディタ ver8.20 b14 で動作を確認、ver8以降なら動くはず。
 
-###Python�o�[�W����
-- �ǂ̃o�[�W�����ł������͂��ł��A���쌟�؂�Python ver2.7/ver3�n�ōs���Ă��܂��B
-- �؂�ւ��̓}�N���`����$g_exe �ϐ���ҏW���ĉ������B
+### Pythonバージョン
+- どのバージョンでも動くはずです、動作検証はPython ver2.7/ver3系で行っています。
+- 切り替えはマクロ冒頭の$g_exe 変数を編集して下さい。
 
-###����
-�X�N���[���V���b�g�����Ă��炦�Ε����邩�Ǝv���܂����A���֐��̂��߁u�G���R�[�h�w��v�����Ă��܂��B
-�G���R�[�h�w����s��Ȃ��Ă����{��(utf8/cp932�Ƃ�)���g���܂��B
+### 特徴
+スクリーンショットを見てもらえば分かるかと思いますが、利便性のため「エンコード指定」を補っています。
+エンコード指定を行わなくても日本語(utf8/cp932とか)が使えます。
 
-���_�C���N�g�����Python���G���[�o�͂���̂ŁA�����������悤�Ƀ��_�C���N�g������Ă��܂��B
+リダイレクトするとPythonがエラー出力するので、正しく動くようにリダイレクトも補っています。
 >UnicodeEncodeError: 'ascii' codec can't encode characters in position 0-3: ordinal not in range(128)
 
 
-�Ȃ̂ŁA���̃}�N���ł̓R�[�h�`���ŐF�X����Ă��܂��B
+なので、このマクロではコード冒頭で色々補っています。
 
  
-    �i�I���W�i���j
-    print u"�ɂق�"
+    （オリジナル）
+    print u"にほんご"
      
-    �i���s�����R�[�h�j
+    （実行されるコード）
     # -*- coding:utf8 -*-
     import sys, codecs
     sys.stdout = codecs.getwriter('cp932')(sys.stdout)
     del sys, codecs
-    print u"�ɂق�"
+    print u"にほんご"
 
-�G���[�s��������Ă��܂�����p������܂����A�����R�[�h���v�������Ƃ�����������悤�ɕ֗�����D�悵�Ă��܂��B
+エラー行数がずれてしまう副作用がありますが、いいコードを思いついたときすぐ試せるように便利さを優先しています。
